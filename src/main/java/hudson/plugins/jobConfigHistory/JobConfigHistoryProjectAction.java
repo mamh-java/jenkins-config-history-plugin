@@ -68,6 +68,9 @@ public class JobConfigHistoryProjectAction extends JobConfigHistoryBaseAction {
     private static final Logger LOG = Logger
             .getLogger(JobConfigHistoryProjectAction.class.getName());
 
+    public static final String AUTH_TOKEN_REGEX = "&lt;authToken&gt;.*?&lt;/authToken&gt;";
+    public static final String REPLACEMENT = "&lt;authToken&gt;********&lt;/authToken&gt;";
+
     /**
      * The project.
      */
@@ -219,9 +222,12 @@ public class JobConfigHistoryProjectAction extends JobConfigHistoryBaseAction {
             return null;
         }
         final String timestamp = getRequestParameter("timestamp");
-        final XmlFile xmlFile = getOldConfigXml(timestamp);
-        return xmlFile.asString();
+
+        boolean redactSecrets = !hasConfigurePermission();
+        return getStringFromXmlFile(getOldConfigXml(timestamp), redactSecrets);
     }
+
+
 
     /**
      * Returns the project for which we want to see the config history, the
@@ -285,7 +291,7 @@ public class JobConfigHistoryProjectAction extends JobConfigHistoryBaseAction {
         }
         String timeStamp = this
                 .getRequestParameter("timestamp" + timestampNumber);
-        SimpleDateFormat format = new java.text.SimpleDateFormat(
+        SimpleDateFormat format = new SimpleDateFormat(
                 "yyyy-MM-dd_HH-mm-ss");
 
         try {
@@ -428,8 +434,46 @@ public class JobConfigHistoryProjectAction extends JobConfigHistoryBaseAction {
         }
         final String timestamp1 = getRequestParameter("timestamp1");
         final String timestamp2 = getRequestParameter("timestamp2");
-        return getLines(getOldConfigXml(timestamp1), getOldConfigXml(timestamp2), hideVersionDiffs);
+
+        boolean redactSecrets = !hasConfigurePermission();
+
+        final List<Line> lines = getLines(getOldConfigXml(timestamp1), getOldConfigXml(timestamp2), hideVersionDiffs, redactSecrets);
+        // redact authToken in old config files if only extended read permission is granted, to prevent leaking them to unauthorized users
+        if (redactSecrets) {
+            return redactAuthTokensInLines(lines);
+        }
+        return lines;
     }
+
+    public static List<Line> redactAuthTokensInLines(List<Line> lines) {
+        if (lines != null) {
+            // if the user has no configure permission but extended read permission,
+            // mask authToken values in the diff view to prevent leaking them to unauthorized users
+            for (Line line : lines) {
+                String leftContent = line.getLeft().getText();
+                String rightContent = line.getRight().getText();
+                if (leftContent != null && leftContent.contains("authToken")) {
+                    // Replace content between <authToken> and </authToken> with stars
+                    String maskedContent = leftContent.replaceAll(
+                            AUTH_TOKEN_REGEX,
+                            REPLACEMENT
+                    );
+                    line.getLeft().setText(maskedContent);
+                }
+                if (rightContent != null && rightContent.contains("authToken")) {
+                    // Replace content between <authToken> and </authToken> with stars
+                    String maskedContent = rightContent.replaceAll(
+                            AUTH_TOKEN_REGEX,
+                            REPLACEMENT
+                    );
+                    line.getRight().setText(maskedContent);
+                }
+            }
+
+        }
+        return lines;
+    }
+
 
     public XmlSyntaxChecker.Answer checkXmlSyntax(String timestamp) {
         return XmlSyntaxChecker.check(getOldConfigXml(timestamp).getFile());

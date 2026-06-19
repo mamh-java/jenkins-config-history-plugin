@@ -560,6 +560,8 @@ public class JobConfigHistoryRootAction extends JobConfigHistoryBaseAction
             final String timestamp1 = getRequestParameter("timestamp1");
             final String timestamp2 = getRequestParameter("timestamp2");
 
+            boolean redactSecrets = !hasConfigurePermission() && hasReadExtensionPermission();
+
             /*final XmlFile configXml1 = getOldConfigXml(name, timestamp1);
             final String[] configXml1Lines = configXml1.asString().split("\\n");
             final XmlFile configXml2 = getOldConfigXml(name, timestamp2);
@@ -572,7 +574,7 @@ public class JobConfigHistoryRootAction extends JobConfigHistoryBaseAction
             final List<String> diffLines = Arrays
                     .asList(diffAsString.split("\n"));
             return getDiffLines(diffLines);*/
-            return getLines(getOldConfigXml(name, timestamp1), getOldConfigXml(name, timestamp2), hideVersionDiffs);
+            return getLines(getOldConfigXml(name, timestamp1), getOldConfigXml(name, timestamp2), hideVersionDiffs, redactSecrets);
         } else {
             return Collections.emptyList();
         }

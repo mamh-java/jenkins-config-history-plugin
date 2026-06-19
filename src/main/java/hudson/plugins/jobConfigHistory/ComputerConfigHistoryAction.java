@@ -416,15 +416,16 @@ public class ComputerConfigHistoryAction extends JobConfigHistoryBaseAction {
     public final String getFile() throws IOException {
         checkConfigurePermission();
         final String timestamp = getRequestParameter("timestamp");
-        final XmlFile xmlFile = getOldConfigXml(timestamp);
-        return xmlFile.asString();
+        boolean redactSecrets = !hasConfigurePermission();
+        return getStringFromXmlFile(getOldConfigXml(timestamp), redactSecrets);
     }
 
     public final List<Line> getLines(boolean hideVersionDiffs) throws IOException {
         checkConfigurePermission();
         final String timestamp1 = getRequestParameter("timestamp1");
         final String timestamp2 = getRequestParameter("timestamp2");
-        return getLines(getOldConfigXml(timestamp1), getOldConfigXml(timestamp2), hideVersionDiffs);
+
+        return getLines(getOldConfigXml(timestamp1), getOldConfigXml(timestamp2), hideVersionDiffs, false);
     }
 
     public XmlSyntaxChecker.Answer checkXmlSyntax(String timestamp) {

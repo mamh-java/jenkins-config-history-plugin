@@ -308,7 +308,8 @@ class JobConfigHistoryRootActionTest {
         final List<SideBySideView.Line> lines = createSut().getLines(
                 getConfigXml(freeStyleProject, timestamps.get(i)),
                 getConfigXml(freeStyleProject, timestamps.get(j)),
-                hideVersionDiffs
+                hideVersionDiffs,
+                false
         );
         assertEquals(expected, lines.size());
     }

@@ -34,6 +34,7 @@ import hudson.model.Action;
 import hudson.plugins.jobConfigHistory.SideBySideView.Line;
 import hudson.security.AccessControlled;
 import hudson.util.MultipartFormDataParser;
+import jenkins.security.ExtendedReadRedaction;
 import org.kohsuke.stapler.Stapler;
 import org.kohsuke.stapler.StaplerRequest2;
 import org.kohsuke.stapler.StaplerResponse2;
@@ -556,18 +557,56 @@ public abstract class JobConfigHistoryBaseAction implements Action {
     }
 
     /**
+     * Converts an XmlFile to its string representation, optionally redacting secrets.
+     * If redaction is enabled and the user lacks configure permission, sensitive
+     * information will be masked using {@link ExtendedReadRedaction#applyAll(String)}.
+     * Otherwise, the raw XML content is returned.
+     *
+     * @param xmlFile the XML file to convert to string. Can be null.
+     * @param redactSecrets whether to apply extended read redaction to the XML content
+     * @return the string representation of the XML file, or an empty string if xmlFile is null.
+     *         If {@code redactSecrets} is true, sensitive values will be masked.
+     * @throws IOException if the XML file content cannot be read or converted to a string
+     */
+    public static String getStringFromXmlFile(XmlFile xmlFile, boolean redactSecrets) throws IOException {
+        String result = "";
+        if (xmlFile != null) {
+            if (redactSecrets) {
+                result = ExtendedReadRedaction.applyAll(xmlFile.asString());
+            }
+            else {
+                result = xmlFile.asString();
+            }
+        }
+        return result;
+    }
+
+    /**
      * Takes the two config files and returns the diff between them as a list of
      * single lines.
      *
      * @param leftConfig  first config file
      * @param rightConfig second config file
+     * @param hideVersionDiffs determines whether version diffs shall be shown or not.
+     * @param redactSecrets determines whether secrets should be redacted in the diff or not.
      * @return Differences between two config versions as list of lines.
      * @throws IOException If diff doesn't work or xml files can't be read.
      */
-    protected final List<Line> getLines(XmlFile leftConfig, XmlFile rightConfig, boolean hideVersionDiffs) throws IOException {
+    protected final List<Line> getLines(XmlFile leftConfig, XmlFile rightConfig, boolean hideVersionDiffs, boolean redactSecrets) throws IOException {
 
-        final String[] leftLines = sort(leftConfig.getFile()).toString().split("\\n");
-        final String[] rightLines = sort(rightConfig.getFile()).toString().split("\\n");
+        final String leftString;
+        final String rightString;
+
+        if (redactSecrets) {
+            leftString = ExtendedReadRedaction.applyAll(sort(leftConfig.getFile()).toString());
+            rightString = ExtendedReadRedaction.applyAll(sort(rightConfig.getFile()).toString());
+        }
+        else {
+            leftString = sort(leftConfig.getFile()).toString();
+            rightString = sort(rightConfig.getFile()).toString();
+        }
+        final String[] leftLines = leftString.split("\\n");
+        final String[] rightLines = rightString.split("\\n");
 
         final String diffAsString = getDiffAsString(leftConfig.getFile(), rightConfig.getFile(), leftLines,
                 rightLines, hideVersionDiffs);

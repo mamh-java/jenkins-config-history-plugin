@@ -1,13 +1,19 @@
 package hudson.plugins.jobConfigHistory;
 
+import hudson.XmlFile;
+import hudson.model.Computer;
 import hudson.security.AccessControlled;
 import jenkins.model.Jenkins;
+import org.htmlunit.Page;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
+import org.jvnet.hudson.test.Issue;
 import org.jvnet.hudson.test.JenkinsRule;
+import org.jvnet.hudson.test.MockAuthorizationStrategy;
 import org.jvnet.hudson.test.junit.jupiter.WithJenkins;
+import org.jvnet.hudson.test.recipes.LocalData;
 import org.kohsuke.stapler.StaplerRequest2;
 
 import java.io.File;
@@ -179,6 +185,32 @@ class JobConfigHistoryBaseActionTest {
                 new Integer[]{0, 1, 2, 3, 4, -1, 50},
                 new JobConfigHistoryBaseActionImpl().getRelevantPageNums(2, 50).toArray()
         );
+    }
+
+
+    @Issue("SECURITY-3742")
+    @Test
+    @LocalData()
+    void testGetLinesWithRedactSecrets() throws IOException {
+        JobConfigHistoryBaseAction sut = new JobConfigHistoryBaseActionImpl();
+        File clearFile = new File(getClass().getResource("configWithClearTextAuthToken.xml").getPath());
+        File encodedFile = new File(getClass().getResource("configWithEncodedAuthToken.xml").getPath());
+        XmlFile left = new XmlFile(clearFile);
+        XmlFile right = new XmlFile(encodedFile);
+
+        List<SideBySideView.Line> lines = sut.getLines(left, right, false, true);
+
+        // Check that no line contains the actual authToken values
+        for (SideBySideView.Line line : lines) {
+            String leftText = line.getLeft().getText();
+            String rightText = line.getRight().getText();
+            // we cannot redact the clear text secret of leftText, but it should be redacted for the real secret
+            assertFalse(rightText != null && rightText.contains("{AQAAABAAAAAQNtUC7oOeACRYWRxPnadbUP7sylp1gIy+WZ79FTDQVv0=}"), "Right side should not contain encoded authToken");
+            // Check that redacted authToken is present
+            if (rightText != null && rightText.contains("<authToken>")) {
+                assertTrue(rightText.contains("<authToken>******</authToken>"), "Right side authToken should be redacted");
+            }
+        }
     }
 
     private String testGetDiffAsString(final String file1txt,
